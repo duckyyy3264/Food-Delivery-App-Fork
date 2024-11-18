@@ -1,10 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
-# Import libraries
 import pandas as pd
 from pandas import DataFrame
 from pathlib import Path
@@ -15,11 +8,6 @@ from sklearn.neighbors import NearestNeighbors
 import ast
 import random
 from pathlib import Path
-
-
-# In[2]:
-
-
 def extract_id(obj):
     try:
         if isinstance(obj, str):
@@ -42,25 +30,9 @@ def process_df(df):
     object_columns = df.select_dtypes(include=['object']).columns
     print(object_columns)
     df[object_columns] = df[object_columns].map(extract_id)
-    # df = convert_object_to_string(df)
     return df
 
 
-# In[ ]:
-
-
-# import os
-# def c_path(path, output_folder="data"):
-#     return Path(output_folder, path)
-
-# order_path = c_path('order.csv')
-# restaurant_path = c_path('restaurant.csv')
-# dish_category = c_path('dish_category.csv')
-# dish_review_path = c_path('dish_review.csv')
-
-# user_path = c_path('user.csv')
-# profile_path = c_path('profile.csv')
-# dish_path = c_path('dish.csv')
 
 import os
 from django.conf import settings
@@ -77,7 +49,6 @@ profile_path = os.path.join(settings.BASE_DIR, 'w_rc_sys', 'data','profile.csv')
 dish_path = os.path.join(settings.BASE_DIR, 'w_rc_sys', 'data','dish.csv')
 
 
-# In[4]:
 
 
 order_df = pd.read_csv(order_path, index_col=0)
@@ -102,20 +73,10 @@ dish_df = pd.read_csv(dish_path, index_col=0)
 dish_df = process_df(dish_df)
 
 
-# In[5]:
-
-
 dish_review_df = process_df(dish_review_df)
 dish_review_df
 
-
-# In[6]:
-
-
 dish_review_df.head()
-
-
-# In[7]:
 
 
 dish_df = pd.read_csv(dish_path, index_col=0)
@@ -123,61 +84,15 @@ dish_df.drop(dish_df.iloc[:, 7:], inplace=True, axis=1)
 dish_df.drop(columns=['image', 'description', 'rating', 'category'], inplace=True)
 dish_df.head()
 
-
-# In[8]:
-
-
-# user_df = pd.read_csv(user_path, index_col=0)
-# profile_df = pd.read_csv(profile_path, index_col=0)
-
-
-# user_df = pd.merge(user_df, profile_df, left_on='id', right_on='user')
-
-# try:
-#     user_df.drop(columns=[
-#         'deliverer',
-#         'restaurant',
-#         'is_active',
-#         'is_staff',
-#         'is_certified_deliverer', 
-#         'is_certified_restaurant', 
-#         'selected_location',
-#     ], inplace=True)
-# except:
-#     print("Columns specified do not exist")
-
 user_df.head()
-
-
-# In[9]:
-
 
 user_dish_review_df = pd.merge(user_df, dish_review_df, left_on='id', right_on='user')
 
-
-# In[10]:
-
-
 user_dish_review_df.head()
 
-
-# In[11]:
-
-
 dish_user_review_df = pd.merge(user_dish_review_df, dish_df, left_on='dish', right_on='id')
-
-
-# In[12]:
-
-
 dish_user_review_df.rename(columns={'name_x': 'user_name', 'name_y': 'dish_name'}, inplace=True)
 dish_user_review_df.drop(columns=[
-    # 'user_name', 
-    # 'dish_name',
-    # 'user', 
-    # 'order', 
-    # 'dish',
-    # 'rating', 
     'phone_number', 
     'avatar', 
     'title',
@@ -194,25 +109,19 @@ dish_user_review_df.drop(columns=[
 ], inplace=True)
 
 
-# In[13]:
 
 
 dish_user_review_df.info()
 
 
-# In[14]:
 
 
 dish_user_review_df.shape
 
 
-# In[15]:
-
 
 user_df.head()
 
-
-# In[16]:
 
 
 from scipy.sparse import csr_matrix
@@ -235,51 +144,27 @@ def create_matrix(df):
     return X, user_mapper, dish_mapper, user_inv_mapper, dish_inv_mapper
 
 
-# In[17]:
-
 
 X, user_mapper, dish_mapper, user_inv_mapper, dish_inv_mapper = create_matrix(dish_user_review_df)
 
 
-# # K-Nearest Neighbors
-# 
-# Sci-kit Learn's NearestNeighbors algorithm is an unsupervised learner for implementing neighbor searches. Here we will execute a brute search with a cosine similarity matrix where the algorithm normalizes the rating by subtracting the mean.
-
-# In[19]:
-
-
 from sklearn.neighbors import NearestNeighbors
+item_model = NearestNeighbors(n_neighbors=5, algorithm="brute", metric='cosine')
+item_model.fit(X)
 
-model = NearestNeighbors(n_neighbors=5, algorithm="brute", metric='cosine')
-model.fit(X)
-
-
-# In[20]:
 
 
 dish_names = dict(zip(dish_user_review_df['dish'], dish_user_review_df['dish_name']))
-# dish_names
-
-
-# In[21]:
 
 
 dish_names_inv = {v: k for k, v in dish_names.items()}
-# dish_mapper
-dish_names
-# len(dish_names_inv)
-
-
-# In[22]:
 
 
 dish_user_review_df.loc[dish_user_review_df['dish_name']  ==  'Cookie thank particularly']
 
 
-# In[39]:
 
-
-def find_similar_dishes(dish_id=None, dish_name=None, k=5):
+def find_similar_dishes(dish_id=None, dish_name=None, n_similar_dishes=5):
     try:
         if dish_id is None and dish_name is None:
             raise ValueError("Must provide either dish_id or dish_name")
@@ -292,8 +177,10 @@ def find_similar_dishes(dish_id=None, dish_name=None, k=5):
         dish_id = str(dish_id)
         dish_ind = dish_mapper[dish_id]
         dish_vec = X[dish_ind].reshape(1, -1)
-        
-        neighbor_indices = model.kneighbors(dish_vec, 
+
+        item_model = NearestNeighbors(n_neighbors=n_similar_dishes + 1, algorithm="brute", metric='cosine')
+        item_model.fit(X)
+        neighbor_indices = item_model.kneighbors(dish_vec, 
                                             return_distance=False).flatten()
         
         neighbor_indices = neighbor_indices[1:]
@@ -313,11 +200,84 @@ def find_similar_dishes(dish_id=None, dish_name=None, k=5):
         return []
 
 
-# In[53]:
 
 
 import random
 
 name_ = random.choice(list(dish_names_inv.keys()))
 find_similar_dishes(dish_name=name_)
+
+
+
+
+from sklearn.neighbors import NearestNeighbors
+user_model = NearestNeighbors(n_neighbors=5, algorithm="brute", metric='cosine')
+user_model.fit(X.T)
+
+
+
+
+def find_similar_dishes_by_user(user_id=None, user_name=None, n_similar_users=5, n_dishes_for_user=5):
+    if user_id is None and user_name is None:
+        raise ValueError("Must provide either user_id or user_name")
+        
+    if user_id is None:
+        user_matches = user_df[user_df['name'] == user_name]
+        if len(user_matches) == 0:
+            raise KeyError(f"User name '{user_name}' not found")
+        user_id = str(user_matches.index[0])
+    
+    user_id = str(user_id)
+    
+    if user_id not in user_mapper:
+        raise KeyError(f"User ID '{user_id}' not found in ratings data")
+    user_idx = user_mapper[user_id]
+    
+    X_user = X.T
+    
+    user_vector = X_user[user_idx].reshape(1, -1)
+    
+    distances, indices = user_model.kneighbors(user_vector, return_distance=True)
+    similar_user_indices = indices.flatten()[1:]  
+    
+    recommended_dishes = []
+    user_rated_dishes = set(dish_user_review_df[dish_user_review_df['user'] == user_id]['dish'])
+    
+    for similar_user_idx in similar_user_indices:
+        similar_user_id = user_inv_mapper[similar_user_idx]
+        similar_user_ratings = dish_user_review_df[dish_user_review_df['user'] == similar_user_id]
+        
+        potential_recommendations = similar_user_ratings[
+            (similar_user_ratings['rating'] >= 4) & 
+            (~similar_user_ratings['dish'].isin(user_rated_dishes))
+        ]
+        
+        for _, row in potential_recommendations.iterrows():
+            dish_id = row['dish']
+            dish_name = dish_names[dish_id]
+            if (dish_name, dish_id) not in recommended_dishes:
+                recommended_dishes.append((dish_name, dish_id))
+                
+            if len(recommended_dishes) >= n_dishes_for_user:
+                break
+                
+        if len(recommended_dishes) >= n_dishes_for_user:
+            break
+    
+    print("Based on similar users' highly rated dishes:\n")
+    
+    return recommended_dishes[:n_dishes_for_user]
+
+
+
+
+random_user_id = random.choice(list(user_inv_mapper.values()))
+print(random_user_id)
+recommendations = find_similar_dishes_by_user(
+    user_id=random_user_id,
+    n_similar_users=1,
+    n_dishes_for_user=2
+)
+recommendations
+    
 

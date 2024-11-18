@@ -11,6 +11,8 @@ from food.models import (
     Dish,
     DishImage
 )
+from review.models import DishReview
+
 
 from account.serializers import BasicUserSerializer
 from food.serializers import (
@@ -132,33 +134,70 @@ class DishViewSet(DefaultGenericMixin, DynamicFilterMixin, ManyRelatedViewSet, R
                 
             elif flag == 'preferences':
                 recommender = self.get_recommender()
+                n_similar_users = int(request.query_params.get('n_similar_users', 5))
+                n_dishes_for_user = int(request.query_params.get('n_dishes_for_user', 20))
+                n_similar_per_dish = int(request.query_params.get('n_similar_per_dish', 5))
+                max_recommendations = int(request.query_params.get('max_recommendations', 100))
+                
                 if not self.request.user.is_authenticated:
-                    from review.models import DishReview
-                    base_dishes = [
-                        _dish.dish for _dish in DishReview.objects.filter(
-                            rating__in=[4, 5]
-                        ).order_by('-rating')[0: 10]
-                    ]
+                    # base_dishes = [
+                    #     dish.dish for dish in DishReview.objects.filter(
+                    #         rating__in=[4, 5]
+                    #     ).order_by('-rating')[0:10]
+                    # ]
+                    # suggested_dishes = []
+                    # for dish in base_dishes:
+                    #     similar_dishes = recommender.find_similar_dishes(dish_id=dish.id, k=10)
+                    #     suggested_dishes.extend(similar_dishes)
+                    import random
+                    from account.models import User
+                    suggested_dishes = recommender.find_personalized_recommendations(
+                        user_id=User.objects.all()[25].id,
+                        n_similar_users=n_similar_users,
+                        n_dishes_for_user=n_dishes_for_user,
+                        n_similar_per_dish=n_similar_per_dish,
+                        max_recommendations=max_recommendations,
+                    )
                 else:
-                    base_dishes = [
-                        _dish.dish for _dish in self.request.user.dish_reviews.filter(
-                            rating__in=[4, 5]
-                        ).order_by('-rating')
-                    ]
+                    suggested_dishes = recommender.find_personalized_recommendations(
+                        user_id=self.request.user.id,
+                        n_similar_users=n_similar_users,
+                        n_dishes_for_user=n_dishes_for_user,
+                        n_similar_per_dish=n_similar_per_dish,
+                        max_recommendations=max_recommendations,
+                    )
                 
-                suggested_dishes = []
-                for dish in base_dishes:
-                    similar_dishes = recommender.find_similar_dishes(dish_id=dish.id, k=10)
-                    suggested_dishes.extend(similar_dishes)
-
-                seen = set()
-                unique_suggestions = []
-                for name, dish_id in suggested_dishes:
-                    if dish_id not in seen:
-                        seen.add(dish_id)
-                        unique_suggestions.append(dish_id)
-                
+                unique_suggestions = [dish_id for _, dish_id in suggested_dishes]                
                 queryset = queryset.filter(id__in=unique_suggestions, name__icontains=p_name)
+
+                # recommender = self.get_recommender()
+                # if not self.request.user.is_authenticated:
+                #     from review.models import DishReview
+                #     base_dishes = [
+                #         _dish.dish for _dish in DishReview.objects.filter(
+                #             rating__in=[4, 5]
+                #         ).order_by('-rating')[0: 10]
+                #     ]
+                # else:
+                #     base_dishes = [
+                #         _dish.dish for _dish in self.request.user.dish_reviews.filter(
+                #             rating__in=[4, 5]
+                #         ).order_by('-rating')
+                #     ]
+                
+                # suggested_dishes = []
+                # for dish in base_dishes:
+                #     similar_dishes = recommender.find_similar_dishes(dish_id=dish.id, k=10)
+                #     suggested_dishes.extend(similar_dishes)
+
+                # seen = set()
+                # unique_suggestions = []
+                # for name, dish_id in suggested_dishes:
+                #     if dish_id not in seen:
+                #         seen.add(dish_id)
+                #         unique_suggestions.append(dish_id)
+                
+                # queryset = queryset.filter(id__in=unique_suggestions, name__icontains=p_name)
 
             if flag in ['temperature', 'preferences']:
                 page = self.paginate_queryset(queryset)
